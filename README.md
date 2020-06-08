@@ -22,3 +22,14 @@ Two days later I got my cable and hooked it up to my laptop. It was recognized i
 AlphaCom works pretty well. I was able to dial up a BBS and get a login page. I wasnt prepared to go beyond that yet. The license is cheap, and, you get to try it free for 30 days (I think). However, Im not in a position to go buying new software licenses right now. Theres others, but, the licensing costs go up from AlphaCom (which is very cheap, by the way).
 
 So, being a developer, I thought "I can develop something". And, thats where this started.
+
+First I had to find out how to control the modem. Having done some serial programming with a GPS device (back in the days), I knew the basics. Because I work in dotnet now, I tried to start with dotnet core. It does have serial port support, but, a little Googling indicates that developers are less than happy with the API. You can find the AT command set for this modem online. I tried some sample code, and, was able to get the modem to respond. But, I wanted tighter control over the communication with the modem, and, dotnet core wasnt going to work well.
+
+So, I went to C++. I quickly found that DOTNET was hiding some of the initialization steps for me (it was only trying to help). After realizing I had to configure the serial port (baud rate, parity, etc), I was able to send some commands and get it to dial.
+
+There is surprisingly little "on Google" that describes modem communications with BBSs. I found SynchroNet code, and, I was going to wade through it to see how it works, but, Im not that patient. I may have to eventually, but, for now, Im going to use trial and error. I did install it locally so I could use it as a testing mechanism via Telnet, but, Im not there yet.
+
+So, I can communicate with the modem, and control it. Controlling hardware is an empowering thing. I send it commands to connect. But, once connected, how do I let it know what I send is a command, and, what needs to be forwarded on to the BBS? After some intense Googling, I found that the modem switches from command mode to data mode after it has connected. Brilliant! And, to get it back to command mode, theres a special string to send. Awsome.
+
+Next question - do I send chunks of data, or, one character-at-a-time? When I was connected to one of the BBSs, I was able to determine that it was responding to single characters, so, the terminal program must be sending one-at-a-time. Seems inefficient, but, this technology was from the 80s. Ill start with the idea that it will send one-character-at-a-time.
+
