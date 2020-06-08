@@ -3,11 +3,15 @@ console based terminal emulator with support for modem and telnet
 
 A pandemic is a good time to dig out the old modem and dial up a BBS.
 
+## The Beginning
+
 A few days ago, somthing got me thinking about Bulletin Board Systems from the 1980s. I had two modems in storage and I decided to get them out and see if any BBSs were still in operation. Heres my experience.
 
 There are some BBSs around. Google found this:
 
 https://www.telnetbbsguide.com/connection/dial-up/
+
+## The Modem
 
 Time to get out the modems. Once of the modems is a softmodem (a winmdoem). Its a Zoom model 2990 from the 1990s, I think. I hooked it up to my Windows 10 machine and no drivers were found. All the drivers I found online are executables that wont run under Windows 10, or in XP mode on Windows 10. I knew it was a long-shot. 
 
@@ -19,9 +23,15 @@ Fortunately, as some point many, many years ago, I bought a US Robotics modem 56
 
 Two days later I got my cable and hooked it up to my laptop. It was recognized immediately. I hooked up my USR modem and looked for a terminal emulator that would support a modem. There are several out there. Most cost money and the free ones are quirky and/or buggy (or maybe I just dont know how to work them).
 
+## The Terminal Emulator
+
 AlphaCom works pretty well. I was able to dial up a BBS and get a login page. I wasnt prepared to go beyond that yet. The license is cheap, and, you get to try it free for 30 days (I think). However, Im not in a position to go buying new software licenses right now. Theres others, but, the licensing costs go up from AlphaCom (which is very cheap, by the way).
 
 So, being a developer, I thought "I can develop something". And, thats where this started.
+
+## The Project
+
+### The Basics
 
 First I had to find out how to control the modem. Having done some serial programming with a GPS device (back in the days), I knew the basics. Because I work in dotnet now, I tried to start with dotnet core. It does have serial port support, but, a little Googling indicates that developers are less than happy with the API. You can find the AT command set for this modem online. I tried some sample code, and, was able to get the modem to respond. But, I wanted tighter control over the communication with the modem, and, dotnet core wasnt going to work well.
 
@@ -33,3 +43,6 @@ So, I can communicate with the modem, and control it. Controlling hardware is an
 
 Next question - do I send chunks of data, or, one character-at-a-time? When I was connected to one of the BBSs, I was able to determine that it was responding to single characters, so, the terminal program must be sending one-at-a-time. Seems inefficient, but, this technology was from the 80s. Ill start with the idea that it will send one-character-at-a-time.
 
+### The Architecture
+
+The API calls that control serial communication all work asynchronously, so, I decided to use IO Completion ports (IOCP) for the IO. I want to handle serial modem communication as well as telnet. The IO APIs for both can be handled by IOCP.
