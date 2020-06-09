@@ -2,33 +2,24 @@
 #include "IPipeClient.h"
 
 class ContermPipeClient :
-    public IPipeClient
+	public IContermClient
 {
 public:
-    ContermPipeClient();
-    ~ContermPipeClient();
-	int connect(HANDLE hIoCompletionPort);
-	int disconnect();
-	void requestCharsToRead();
-	void readChars();
-	void writeChars();
-	void printBuffer(unsigned int nchars);
-	static const int OP_WRITE = 1;
-	static const int OP_CHECK = 2;
-	static const int OP_READ = 3;
+	ContermPipeClient();
+	~ContermPipeClient();
+	int term_connect(HANDLE hIoCompletionPort);
+	int term_disconnect();
+	void term_requestCharsToRead();
+	void term_readChars();
+	void term_writeChars(const char* data, unsigned int nchars);
+	void term_printBuffer(unsigned int nchars);
 private:
-    static DWORD WINAPI ServerProc(void* pVoid);
-    HANDLE hServerThread = INVALID_HANDLE_VALUE;
+	static DWORD WINAPI ServerProc(void* pVoid);
+	HANDLE hServerThread = INVALID_HANDLE_VALUE;
 	HANDLE hPipeServer = INVALID_HANDLE_VALUE;
 	HANDLE hClient = INVALID_HANDLE_VALUE;
 	int operation = 0;
 	char clientReadBuffer[1024];
 	HANDLE hServerReadyEvent = INVALID_HANDLE_VALUE;
-	void* lpContermPipeClientContext = NULL;
 };
 
-typedef struct _CONTERM_PIPE_CLIENT_CONTEXT
-{
-	OVERLAPPED overlapped;
-	ContermPipeClient* lpClient;
-} CONTERM_PIPE_CLIENT_CONTEXT;
