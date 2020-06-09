@@ -46,3 +46,8 @@ Next question - do I send chunks of data, or, one character-at-a-time? When I wa
 ### The Architecture
 
 The API calls that control serial communication all work asynchronously, so, I decided to use IO Completion ports (IOCP) for the IO. I want to handle serial modem communication as well as telnet. The IO APIs for both can be handled by IOCP.
+
+I started going directly for the modem connection, but, realized I didnt have a good test environment, unless I wanted to call a BBS and hang up 50 times a day.  So, I installed Synchronet BBS and started coding a telnet client first. Im hoping coding the modem client will be easier once I get that done. And, Im very close. I can connect, get the starting page and interact with the BBS. I had to learn about telnet command protocol. The BBS sends some telnet commands to the client, mostly just letting the client know what its going to do. It will default to a dumb terminal unless negotiated otherwise. It also sends ANSI escape codes which I have contemplated parsing and executing, but, seems like a bigger task than I want to handle right now.
+
+There are no functions in the C runtime to get a character from the keyboard asynchronously (at least none I wanted to use). I found a couple of possible solutions on the internet, but, opted to code my own with the windows API. Using WaitForSingleObject on STDIN, GetNumberOfConsoleInputEvents and ReadConsoleInput, I was able to craft a thread that detects keydown events and sends the characters to my client class, which then sends across the "wire" to the server (telnet, serial modem, etc). Works very well. This is all console, of course - no windows.
+
