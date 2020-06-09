@@ -7,29 +7,38 @@
 
 TelnetClient::TelnetClient()
 {
-    CONTERM_CLIENT_CONTEXT* lpContext = new CONTERM_CLIENT_CONTEXT();
-    lpContext->lpClient = this;
-    memset(&lpContext->overlapped, 0, sizeof(OVERLAPPED));
-    this->lpContermClientContext = (void*)lpContext;
+    //CONTERM_CLIENT_CONTEXT* lpContext = new CONTERM_CLIENT_CONTEXT();
+    //lpContext->lpClient = this;
+    //memset(&lpContext->overlapped, 0, sizeof(OVERLAPPED));
+    //this->lpContermClientContext = (void*)lpContext;
 
     HANDLE hHeap = GetProcessHeap();
-    this->lpBuffer = (char*)HeapAlloc(hHeap, HEAP_ZERO_MEMORY, 1024);
-    this->clientWsaBuffer.buf = this->lpBuffer;
-    this->clientWsaBuffer.len = 1024;
+    this->inBuffer = (char*)HeapAlloc(hHeap, HEAP_ZERO_MEMORY, 1024);
+    this->inWsaBuffer.buf = this->inBuffer;
+    this->inWsaBuffer.len = 1024;
+
+    this->outBuffer = (char*)HeapAlloc(hHeap, HEAP_ZERO_MEMORY, 1024);
+    this->outWsaBuffer.buf = this->outBuffer;
+    this->outWsaBuffer.len = 1024;
 
     this->commandMode = 0;
+    memset(this->telnetCommand, 0, 5);
+
+    this->hConsoleOut = GetStdHandle(STD_OUTPUT_HANDLE);
 }
 
 TelnetClient::~TelnetClient()
 {
     HANDLE hHeap = GetProcessHeap();
-    HeapFree(hHeap, 0, this->lpBuffer);
-    CONTERM_CLIENT_CONTEXT* lpContext = (CONTERM_CLIENT_CONTEXT*)this->lpContermClientContext;
-    delete lpContext;
-    this->lpContermClientContext = NULL;
+    HeapFree(hHeap, 0, this->inBuffer);
+    HeapFree(hHeap, 0, this->outBuffer);
+
+    //CONTERM_CLIENT_CONTEXT* lpContext = (CONTERM_CLIENT_CONTEXT*)this->lpContermClientContext;
+    //delete lpContext;
+    //this->lpContermClientContext = NULL;
 }
 
-int TelnetClient::term_connect(HANDLE hIoCompletionPort)
+int TelnetClient::term_connect()
 {
     struct addrinfo* result = NULL;
     struct addrinfo* ptr = NULL;
@@ -82,20 +91,19 @@ int TelnetClient::term_connect(HANDLE hIoCompletionPort)
         WSACleanup();
         return 1;
     }
-    else {
-        printf("TELNET: Associating socket with iocp\n");
-        CreateIoCompletionPort((HANDLE)this->ConnectSocket, hIoCompletionPort, (ULONG_PTR)this, 0);
-    }
+    //else {
+        //printf("TELNET: Associating socket with iocp\n");
+        //CreateIoCompletionPort((HANDLE)this->ConnectSocket, hIoCompletionPort, (ULONG_PTR)this, 0);
+    //}
 
     // begin receiving immediately
-    this->term_readChars();
+    //this->term_readChars();
 
     return 0;
 }
 
 int TelnetClient::term_disconnect()
 {
-    printf("TELNET: closing socket\n");
     if (this->ConnectSocket) {
         closesocket(this->ConnectSocket);
     }
@@ -107,76 +115,56 @@ void TelnetClient::term_requestCharsToRead()
 
 }
 
-void TelnetClient::term_readChars()
+unsigned int TelnetClient::term_readChars()
 {
-    //printf("TELNET: Reading chars\n");
-    this->term_setOperation(OP_READ);
-    memset(this->lpBuffer, 0, 1024);
-    this->clientWsaBuffer.len = 1024;
+
     DWORD nbr = 0;
     DWORD flags = 0;
-    CONTERM_CLIENT_CONTEXT* lpContext = (CONTERM_CLIENT_CONTEXT*)this->lpContermClientContext;
-    int result = WSARecv(this->ConnectSocket, &this->clientWsaBuffer, 1, &nbr, &flags, &lpContext->overlapped, NULL);
-    if (result != SOCKET_ERROR)
+
+    //printf("TELNET: Reading chars\n");
+    //this->term_setOperation(OP_READ);
+
+    // clear the entire buffer
+    memset(this->inBuffer, 0, 1024);
+
+    // configure the wsabuf
+    this->inWsaBuffer.len = 1024;
+
+    //CONTERM_CLIENT_CONTEXT* lpContext = (CONTERM_CLIENT_CONTEXT*)this->lpContermClientContext;
+    //int result = WSARecv(this->ConnectSocket, &this->clientWsaBuffer, 1, &nbr, &flags, &lpContext->overlapped, NULL);
+    int result = WSARecv(
+        this->ConnectSocket,
+        &this->inWsaBuffer,
+        1,
+        &nbr,
+        &flags,
+        NULL,
+        NULL);
+    if(result == SOCKET_ERROR)
     {
-        printf("ERROR: result should be socket error\n");
+        //printf("\nERROR: socket error on recv\n");
+        nbr = 0;
     }
-    else if (WSAGetLastError() != WSA_IO_PENDING) {
-        printf("ERROR: last error should be io pending %i\n", WSAGetLastError());
-    }
+    return nbr;
 }
 
 void TelnetClient::term_writeChars(const char* data, unsigned int nchars)
 {
-    this->term_setOperation(OP_WRITE);
-    memset(this->lpBuffer, 0, 1024);
-    strncpy_s(lpBuffer, 1023, data, nchars);
-    this->clientWsaBuffer.len = (nchars > 1024) ? 1024 : nchars;
+    //this->term_setOperation(OP_WRITE);
+    memset(this->outBuffer, 0, 1024);
+    strncpy_s(this->outBuffer, 1023, data, nchars);
+    this->outWsaBuffer.len = (nchars > 1024) ? 1024 : nchars;
     DWORD nbs = 0;
-    CONTERM_CLIENT_CONTEXT* lpContext = (CONTERM_CLIENT_CONTEXT*)this->lpContermClientContext;
-    WSASend(this->ConnectSocket, &this->clientWsaBuffer,
-        1, &nbs, 
-        0, &lpContext->overlapped, NULL);
+    //CONTERM_CLIENT_CONTEXT* lpContext = (CONTERM_CLIENT_CONTEXT*)this->lpContermClientContext;
+    WSASend(
+        this->ConnectSocket, 
+        &this->outWsaBuffer,
+        1, 
+        &nbs, 
+        0, 
+        NULL, 
+        NULL);
 }
-
-//void TelnetClient::executeCommand()
-//{
-//    printf("TELNET: ");
-//    switch (this->telnetCommand[1])
-//    {
-//    case 251: // will
-//        switch (this->telnetCommand[2]) {
-//        case 1: // echo
-//            printf("Will echo\n");
-//            break;
-//        case 3: // suppress go ahead
-//            printf("Will suppress go ahead\n");
-//            break;
-//        }
-//        break;
-//    case 253: // do
-//        switch (this->telnetCommand[2]) {
-//        case 24: // term type
-//            printf("Do term type\n");
-//            break;
-//        case 31: // window size
-//            printf("do window size\n");
-//            break;
-//        case 39: // env option
-//            printf("do env option\n");
-//            break;
-//        case 255: // exopl
-//            switch(this->telnetCommand[3])
-//            {
-//            case 253: // do
-//                printf("do extended %i\n", this->telnetCommand[4]);
-//                break;
-//            }
-//            break;
-//        }
-//    }
-//    this->commandMode = 0;
-//}
 
 enum TELNET_OPT_CODE {
     OPT_BINARY_XMIT = 0,
@@ -247,7 +235,7 @@ unsigned int TelnetClient::parseTelnetCommand(unsigned int pos, unsigned int nch
 
     printf("** IAC; ");
 
-    unsigned char telnetCmd = this->lpBuffer[pos + 1];
+    unsigned char telnetCmd = this->inBuffer[pos + 1];
     switch (telnetCmd) {
     case CC_SE: printf("END SUBNEG; "); break;
     case CC_NOP: printf("NO OPERATION; "); break;
@@ -270,7 +258,7 @@ unsigned int TelnetClient::parseTelnetCommand(unsigned int pos, unsigned int nch
         break; // invalid command
     }
 
-    unsigned char telnetOpt = this->lpBuffer[pos + 2];
+    unsigned char telnetOpt = this->inBuffer[pos + 2];
     if (telnetOpt == OPT_EXTENDED)
     {
         printf("EXT-OPT-LIST; ");
@@ -325,31 +313,54 @@ unsigned int TelnetClient::parseTelnetCommand(unsigned int pos, unsigned int nch
 
 unsigned int TelnetClient::parseAnsiEscape(unsigned int pos, unsigned int nchars)
 {
+    unsigned int initialPos = pos;
     int charsLeft = nchars - (pos + 1);
+    DWORD nbw = 0;
 
-    if (charsLeft < 1) return pos;
+    if (charsLeft < 1) {
+        printf("\nreturning early from esacpe sequence\n");
+        return pos;
+    }
     pos++; charsLeft--;
-    if (this->lpBuffer[pos] != '[')
+    //if (this->lpBuffer[pos] != '[')
+    if (this->inBuffer[pos] < 0x40 || this->inBuffer[pos] >0x5f)
     {
-        printf("ESC SEQ ERROR!\n");
+        printf("\nreturning early from esacpe sequence\n");
         return pos;
     }
 
-    if (charsLeft < 1) return pos;
+    if (charsLeft < 1) {
+        printf("\nreturning early from esacpe sequence\n");
+        return pos;
+    }
     pos++; charsLeft--;
     do {
-        if (this->lpBuffer[pos] > 0x3f && this->lpBuffer[pos] < 0x7f)
+        if (this->inBuffer[pos] > 0x3f && this->inBuffer[pos] < 0x7f)
         {
             // this is the ending char
             //printf("** ANSI ESCAPE SEQUENCE\n");
+            WriteConsoleA(this->hConsoleOut, 
+                this->inBuffer + initialPos,
+                (pos - initialPos) + 1, &nbw, NULL);
             return pos;
         }
         pos++; charsLeft--;
     } while (charsLeft >= 0);
 
     // returning early; error?
-    printf("ERROR; returning early\n");
+    printf("\nreturning early from esacpe sequence\n");
     return pos;
+}
+
+void TelnetClient::term_logRaw(FILE* file, unsigned int nchars)
+{
+    for (unsigned int i = 0; i < nchars; i++) {
+        fprintf(file, "pos %04i hex %02x int %03i char '%c'\n", 
+            i,
+            (unsigned char)this->inBuffer[i],
+            (unsigned char)this->inBuffer[i],
+            this->inBuffer[i]);
+    }
 }
 
 void TelnetClient::term_printBuffer(unsigned int nchars)
@@ -360,7 +371,7 @@ void TelnetClient::term_printBuffer(unsigned int nchars)
         // special 32-47, 58-64, 91-96, 123-126
         // numbers 39-39
         // letters 65-90, 97-122
-        c = this->lpBuffer[i];
+        c = this->inBuffer[i];
         if (c == 255) {
             // telnet command (do it!)
             i = this->parseTelnetCommand(i, nchars);

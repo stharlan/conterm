@@ -8,12 +8,17 @@
 #include "ContermPipeClient.h"
 #include "TelnetClient.h"
 
+#pragma comment(lib, "winmm.lib")
+
+IContermClient* g_client = NULL;
+
 // thread
 // check for data to send
 //   send data
 // check for incoming data
 //   
 
+/*
 void sendCommandAndWaitForResponse(HANDLE hCom, const char* cmd)
 {
 	DWORD nbw = 0;
@@ -39,14 +44,23 @@ void sendCommandAndWaitForResponse(HANDLE hCom, const char* cmd)
 	} while (nbr > 0);
 	printf("\n");
 }
+*/
 
-HANDLE hIocp = INVALID_HANDLE_VALUE;
-HANDLE hThread = INVALID_HANDLE_VALUE;
-HANDLE hWorkerThreadReady = INVALID_HANDLE_VALUE;
-HANDLE hInputHandlerStartEvent = INVALID_HANDLE_VALUE;
-HANDLE hInputHandlerStopEvent = INVALID_HANDLE_VALUE;
-HANDLE hInputHandlerThread = INVALID_HANDLE_VALUE;
+//HANDLE hIocp = INVALID_HANDLE_VALUE;
+//HANDLE hThread = INVALID_HANDLE_VALUE;
+//HANDLE hWorkerThreadReady = INVALID_HANDLE_VALUE;
+//HANDLE hInputHandlerStartEvent = INVALID_HANDLE_VALUE;
+//HANDLE hInputHandlerStopEvent = INVALID_HANDLE_VALUE;
+//HANDLE hInputHandlerThread = INVALID_HANDLE_VALUE;
 
+HANDLE hReadThread = INVALID_HANDLE_VALUE;
+HANDLE hReadThreadReadyEvent = INVALID_HANDLE_VALUE;
+HANDLE hReadThreadQuitEvent = INVALID_HANDLE_VALUE;
+HANDLE hWriteThread = INVALID_HANDLE_VALUE;
+HANDLE hWriteThreadReadyEvent = INVALID_HANDLE_VALUE;
+HANDLE hWriteThreadQuitEvent = INVALID_HANDLE_VALUE;
+
+/*
 DWORD WINAPI WorkerThread(void* parm)
 {
 
@@ -61,51 +75,66 @@ DWORD WINAPI WorkerThread(void* parm)
 	DWORD dwEventMask = 0;
 	DWORD nbr = 0;
 
+	FILE* log = NULL;
+	DWORD tgt = timeGetTime();
+	char filename[64];
+	memset(filename, 0, 64);
+	sprintf_s(filename, 64, "log%08x.txt", tgt);
+	fopen_s(&log, filename, "w");
+
 	SetEvent(hWorkerThreadReady);
 	do {
 		// after ten seconds it will timeout
 		// result will be FALSE and it will close down
 		//printf("THREAD: Waiting for packet\n");
+		fprintf(log, "Waiting for GetQueuedCompletionStatus...\n");
 		result = GetQueuedCompletionStatus(hIocp, &nbt, &cmplKey, &lpOverlapped, INFINITE);
 		//printf("THREAD: Got a packet\n");
+		fprintf(log, "GetQueuedCompletionStatus returned\n");
 		if (TRUE == result) {
-			CONTERM_CLIENT_CONTEXT* cpctx = (CONTERM_CLIENT_CONTEXT*)lpOverlapped;
-			IContermClient* ctx = cpctx->lpClient;
-			//printf("THREAD: Operation is %i\n", ctx->term_getOperation());
-			if (ctx->term_getOperation() == IContermClient::OP_WRITE)
-			{
-				// we've just written something, now read
-				ctx->term_setOperation(IContermClient::OP_READ);
-
-				// if com port, do this
-				//ctx->setOperation(ContermPipeClient::OP_CHECK);
-				//SetCommMask(ctx->hCom, EV_RXCHAR);
-				//WaitCommEvent(ctx->hCom, &dwEventMask, &ctx->ovl);
-
-				// if named pipe, do this
-				// peek
-				// read if available bytes
+			fprintf(log, "GetQueuedCompletionStatus returned 'true'\n");
+			if (lpOverlapped == NULL) {
+				fprintf(log, "OVERLAPPED is null\n");
 			}
-			else if (ctx->term_getOperation() == IContermClient::OP_CHECK)
-			{
-				//printf("THREAD: %i bytes ready to read.\n", nbt);
-				//memset(ctx->buffer, 0, 256);
-				//ctx->op = OP_READ;
-				//ReadFile(ctx->hCom, ctx->buffer, nbt, &nbr, &ctx->ovl);
-			}
-			else if (ctx->term_getOperation() == IContermClient::OP_READ)
-			{
-				//printf("THREAD: Got a read packet\n");
-				if (nbt > 0) {
-					ctx->term_printBuffer(nbt);
-					//printf("\n");
-					//memset(ctx->buffer, 0, 256);
-					//ReadFile(ctx->hCom, ctx->buffer, nbt, &nbr, &ctx->ovl);
+			else {
+				CONTERM_CLIENT_CONTEXT* cpctx = (CONTERM_CLIENT_CONTEXT*)lpOverlapped;
+				IContermClient* ctx = cpctx->lpClient;
+				fprintf(log, "Operation is %i\n", ctx->term_getOperation());
+				if (ctx->term_getOperation() == IContermClient::OP_WRITE)
+				{
+					// we've just written something, now read
+					ctx->term_setOperation(IContermClient::OP_READ);
+
+					// if com port, do this
+					//ctx->setOperation(ContermPipeClient::OP_CHECK);
+					//SetCommMask(ctx->hCom, EV_RXCHAR);
+					//WaitCommEvent(ctx->hCom, &dwEventMask, &ctx->ovl);
+
+					// if named pipe, do this
+					// peek
+					// read if available bytes
 				}
-				ctx->term_readChars();
+				else if (ctx->term_getOperation() == IContermClient::OP_CHECK)
+				{
+				}
+				else if (ctx->term_getOperation() == IContermClient::OP_READ)
+				{
+					if (nbt > 0) {
+						fprintf(log, "**** %i chars transferred\n", nbt);
+						ctx->term_logRaw(log, nbt);
+						ctx->term_printBuffer(nbt);
+						ctx->term_readChars();
+					}
+					else {
+						// if there are chars to write, write the 
+						// chars in the buffer
+						// otherwise, post a read
+					}
+				}
 			}
 		}
 		else {
+			fprintf(log, "GetQueuedCompletionStatus returned 'false'...\n");
 			if (lpOverlapped == NULL && GetLastError() == ERROR_ABANDONED_WAIT_0)
 			{
 				result = FALSE;
@@ -115,6 +144,8 @@ DWORD WINAPI WorkerThread(void* parm)
 			}
 		}
 	} while (TRUE == result);
+
+	fclose(log);
 
 	//printf("THREAD: Worker thread quitting.\n");
 	return 0;
@@ -147,8 +178,10 @@ DWORD WINAPI ConsoleInputHandlerThread(void* pVoid)
 				if (inrec.EventType == KEY_EVENT) {
 					if (TRUE == inrec.Event.KeyEvent.bKeyDown)
 					{
-						// send to server
-						pClient->term_writeChars(&inrec.Event.KeyEvent.uChar.AsciiChar, 1);
+						// check if io is pending
+						// if io is pending, save this to a buffer
+						// if no io pending, write chars
+						//pClient->term_writeChars(&inrec.Event.KeyEvent.uChar.AsciiChar, 1);
 					}
 				}
 			}
@@ -177,6 +210,142 @@ void StopInputHandler()
 	CloseHandle(hInputHandlerStopEvent);
 	printf("MAIN: Input handler stopped\n");
 }
+*/
+
+void resetConsole()
+{
+	DWORD nbw = 0;
+	const char ec[2] = { 0x1b, 'c' };
+	WriteConsoleA(GetStdHandle(STD_OUTPUT_HANDLE), ec, 2, &nbw, NULL);
+	//char esbuffer[7];
+	//esbuffer[0] = 27;
+	//esbuffer[1] = '[';
+	//esbuffer[2] = '0';
+	//esbuffer[3] = ';';
+	//esbuffer[4] = '3';
+	//esbuffer[5] = '1';
+	//esbuffer[6] = 'm';
+}
+
+void enableANSIEscapeSequences()
+{
+	DWORD origMode = 0;
+	BOOL bRes = 0;
+
+	// enable the console to handle ansi escape sequences
+	HANDLE stdOut = GetStdHandle(STD_OUTPUT_HANDLE);
+	GetConsoleMode(stdOut, &origMode);
+	printf("Console needs virtual terminal processing. Setting...\n");
+	bRes = SetConsoleMode(stdOut, origMode | ENABLE_VIRTUAL_TERMINAL_PROCESSING);
+	if (bRes == 0) {
+		printf("ERROR: SetConsoleMode failed %i\n", GetLastError());
+	}
+	else {
+		printf("Virtual processing is set.\n");
+		resetConsole();
+	}
+}
+
+// thread to write to server
+DWORD WINAPI WriteThread(void* pVoid)
+{
+	IContermClient* lpClient = (IContermClient*)pVoid;
+	SetEvent(hWriteThreadReadyEvent);
+	do {
+		if (WAIT_TIMEOUT != WaitForSingleObject(GetStdHandle(STD_INPUT_HANDLE), 500))
+		{
+			DWORD nev = 0;
+			GetNumberOfConsoleInputEvents(GetStdHandle(STD_INPUT_HANDLE), &nev);
+
+			if (nev > 0) {
+				for (DWORD e = 0; e < nev; e++) {
+					INPUT_RECORD inrec = { 0 };
+					DWORD ner = 0;
+					ReadConsoleInput(GetStdHandle(STD_INPUT_HANDLE), &inrec, 1, &ner);
+					if (inrec.EventType == KEY_EVENT) {
+						if (TRUE == inrec.Event.KeyEvent.bKeyDown)
+						{
+							// check if io is pending
+							// if io is pending, save this to a buffer
+							// if no io pending, write chars
+							lpClient->term_writeChars(&inrec.Event.KeyEvent.uChar.AsciiChar, 1);
+						}
+					}
+				}
+			}
+		}
+	} while (WAIT_OBJECT_0 != WaitForSingleObject(hWriteThreadQuitEvent, 0));
+	return 0;
+}
+
+void StartWriteThread(IContermClient* pClient)
+{
+	hWriteThreadReadyEvent = CreateEvent(NULL, TRUE, FALSE, NULL);
+	hWriteThreadQuitEvent = CreateEvent(NULL, TRUE, FALSE, NULL);
+	hWriteThread = CreateThread(NULL, 0, WriteThread, (LPVOID)pClient, 0, NULL);
+	WaitForSingleObject(hWriteThreadReadyEvent, INFINITE);
+}
+
+void StopWriteThread()
+{
+	SetEvent(hWriteThreadQuitEvent);
+	WaitForSingleObject(hWriteThread, INFINITE);
+	CloseHandle(hWriteThreadReadyEvent);
+	CloseHandle(hWriteThreadQuitEvent);
+	CloseHandle(hWriteThread);
+}
+
+// thread to read from server
+DWORD WINAPI ReadThread(void* pVoid)
+{
+	IContermClient* lpClient = (IContermClient*)pVoid;
+
+	FILE* log = NULL;
+	DWORD tgt = timeGetTime();
+	char filename[64];
+	memset(filename, 0, 64);
+	sprintf_s(filename, 64, "log%08x.txt", tgt);
+	fopen_s(&log, filename, "w");
+
+	// signal ready
+	SetEvent(hReadThreadReadyEvent);
+
+	do {
+		// this will block
+		fprintf(log, "Waiting for data...\n");
+		unsigned int nbr = lpClient->term_readChars();
+		fprintf(log, "Got %i chars.\n", nbr);
+		if (nbr > 0) {
+			lpClient->term_logRaw(log, nbr);
+			lpClient->term_printBuffer(nbr);
+		}
+	} while (WAIT_OBJECT_0 != WaitForSingleObject(hReadThreadQuitEvent, 0));
+
+	fclose(log);
+
+	return 0;
+}
+
+void StartReadThread(IContermClient* pClient)
+{
+	hReadThreadReadyEvent = CreateEvent(NULL, TRUE, FALSE, NULL);
+	hReadThreadQuitEvent = CreateEvent(NULL, TRUE, FALSE, NULL);
+	hReadThread = CreateThread(NULL, 0, ReadThread, (LPVOID)pClient, 0, NULL);
+	WaitForSingleObject(hReadThreadReadyEvent, INFINITE);
+}
+
+void SignalReadThreadToQuit()
+{
+	SetEvent(hReadThreadQuitEvent);
+}
+
+void WaitForReadThreadToQuit()
+{
+	WaitForSingleObject(hReadThread, INFINITE);
+	CloseHandle(hReadThreadReadyEvent);
+	CloseHandle(hReadThreadQuitEvent);
+	CloseHandle(hReadThread);
+}
 
 BOOL WINAPI HandlerRoutine(
 	_In_ DWORD dwCtrlType
@@ -184,7 +353,9 @@ BOOL WINAPI HandlerRoutine(
 {
 	switch (dwCtrlType) {
 	case CTRL_C_EVENT:
-		CloseHandle(hIocp);
+		StopWriteThread();
+		SignalReadThreadToQuit();
+		g_client->term_disconnect();
 		return TRUE;
 	}
 	return FALSE;
@@ -198,23 +369,25 @@ int main()
 
 	SetConsoleCtrlHandler(HandlerRoutine, TRUE);
 
-	printf("MAIN: Creating io completion port...\n");
-	hIocp = CreateIoCompletionPort(INVALID_HANDLE_VALUE, NULL, 0, 1);
-	if (hIocp == NULL) {
-		printf("MAIN: ERROR: Failed to create io completion port\n");
-		return 0;
-	}
+	enableANSIEscapeSequences();
 
-	printf("MAIN: Creating worker thread...\n");
-	hWorkerThreadReady = CreateEvent(NULL, TRUE, FALSE, NULL);
-	hThread = CreateThread(NULL, 0, WorkerThread, hIocp, 0, NULL);
-	if (NULL == hThread) {
-		printf("MAIN: ERROR: Failed to create worker thread\n");
-		CloseHandle(hIocp);
-		return 0;
-	}
-	printf("MAIN: Waiting for worker thread to be ready...\n");
-	WaitForSingleObject(hWorkerThreadReady, INFINITE);
+	//printf("MAIN: Creating io completion port...\n");
+	//hIocp = CreateIoCompletionPort(INVALID_HANDLE_VALUE, NULL, 0, 1);
+	//if (hIocp == NULL) {
+		//printf("MAIN: ERROR: Failed to create io completion port\n");
+		//return 0;
+	//}
+
+	//printf("MAIN: Creating worker thread...\n");
+	//hWorkerThreadReady = CreateEvent(NULL, TRUE, FALSE, NULL);
+	//hThread = CreateThread(NULL, 0, WorkerThread, hIocp, 0, NULL);
+	//if (NULL == hThread) {
+		//printf("MAIN: ERROR: Failed to create worker thread\n");
+		//CloseHandle(hIocp);
+		//return 0;
+	//}
+	//printf("MAIN: Waiting for worker thread to be ready...\n");
+	//WaitForSingleObject(hWorkerThreadReady, INFINITE);
 
 	//printf("MAIN: Opening COM port 5...\n");
 	//HANDLE hCom = CreateFile(L"COM5", 
@@ -237,15 +410,34 @@ int main()
 	//}
 
 	//ContermPipeClient* lpClient = new ContermPipeClient();
+
 	TelnetClient* lpClient = new TelnetClient();
+	g_client = (IContermClient*)lpClient;
+
 	printf("MAIN: Connecting to server\n");
-	lpClient->term_connect(hIocp);
+	lpClient->term_connect();
+
+	// start read thread
+	printf("MAIN: Starting read thread...\n");
+	StartReadThread(lpClient);
+	StartWriteThread(lpClient);
+
+	// pressing ctrl-c will close the 
+	// client connection and signal
+	// the read thread that it can exit
+	printf("MAIN: Wating for read thread to quit...\n");
+	WaitForReadThreadToQuit();
+
+	// disconnect client();
+	delete lpClient;
+	lpClient = NULL;
+
 	//printf("MAIN: Specifying terminal\n");
 	//lpClient->term_writeChars("TERM_TYPE=ANSI-BBS\r");
 	//printf("MAIN: Reading chars from server\n");
 	//lpClient->term_readChars();
 
-	StartInputHandler(lpClient);
+	//StartInputHandler(lpClient);
 
 	//DCB dcbSerialParams = { 0 };
 	//dcbSerialParams.DCBlength = sizeof(dcbSerialParams);
@@ -332,20 +524,18 @@ int main()
 	////}
 
 
-	printf("MAIN: Waiting for thread to quit...\n");
-	WaitForSingleObject(hThread, INFINITE);
-	CloseHandle(hThread);
+	//printf("MAIN: Waiting for thread to quit...\n");
+	//WaitForSingleObject(hThread, INFINITE);
+	//CloseHandle(hThread);
 
-	StopInputHandler();
+	//StopInputHandler();
 
-	printf("MAIN: Closing coms\n");
-	lpClient->term_disconnect();
-	delete lpClient;
-
-	printf("MAIN: Closing io completion port\n");
-	CloseHandle(hIocp);
+	//printf("MAIN: Closing io completion port\n");
+	//CloseHandle(hIocp);
 
 	WSACleanup();
+
+	resetConsole();
 
 	printf("MAIN: Done.\n");
 	return 0;

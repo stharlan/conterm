@@ -11,10 +11,10 @@ ContermPipeClient::ContermPipeClient()
 
     memset(this->clientReadBuffer, 0, 1024);
 
-    CONTERM_CLIENT_CONTEXT* lpContext = new CONTERM_CLIENT_CONTEXT();
-    lpContext->lpClient = (IContermClient*)this;
-    memset(&lpContext->overlapped, 0, sizeof(OVERLAPPED));
-    this->lpContermClientContext = (void*)lpContext;
+    //CONTERM_CLIENT_CONTEXT* lpContext = new CONTERM_CLIENT_CONTEXT();
+    //lpContext->lpClient = (IContermClient*)this;
+    //memset(&lpContext->overlapped, 0, sizeof(OVERLAPPED));
+    //this->lpContermClientContext = (void*)lpContext;
 
     this->hServerReadyEvent = CreateEvent(NULL, TRUE, FALSE, NULL);
     this->hServerThread = CreateThread(NULL, 0,
@@ -32,9 +32,9 @@ ContermPipeClient::~ContermPipeClient()
         this->hServerThread = NULL;
     }
     this->hPipeServer = NULL;
-    CONTERM_CLIENT_CONTEXT* lpContext = (CONTERM_CLIENT_CONTEXT*)this->lpContermClientContext;
-    delete lpContext;
-    this->lpContermClientContext = NULL;
+    //CONTERM_CLIENT_CONTEXT* lpContext = (CONTERM_CLIENT_CONTEXT*)this->lpContermClientContext;
+    //delete lpContext;
+    //this->lpContermClientContext = NULL;
 }
 
 DWORD WINAPI ContermPipeClient::ServerProc(void* pVoid)
@@ -91,16 +91,16 @@ DWORD WINAPI ContermPipeClient::ServerProc(void* pVoid)
 }
 
 
-int ContermPipeClient::term_connect(HANDLE hIoCompletionPort)
+int ContermPipeClient::term_connect()
 {
-    this->hClient = CreateFileA(THIS_PIPE_NAME,
-        GENERIC_READ | GENERIC_WRITE,
-        0,
-        NULL,
-        OPEN_EXISTING,
-        FILE_FLAG_OVERLAPPED,
-        NULL);
-    CreateIoCompletionPort(this->hClient, hIoCompletionPort, (ULONG_PTR)this, 0);
+    //this->hClient = CreateFileA(THIS_PIPE_NAME,
+    //    GENERIC_READ | GENERIC_WRITE,
+    //    0,
+    //    NULL,
+    //    OPEN_EXISTING,
+    //    FILE_FLAG_OVERLAPPED,
+    //    NULL);
+    //CreateIoCompletionPort(this->hClient, hIoCompletionPort, (ULONG_PTR)this, 0);
     return 0;
 }
 
@@ -115,19 +115,25 @@ void ContermPipeClient::term_requestCharsToRead()
 
 }
 
-void ContermPipeClient::term_readChars()
+void ContermPipeClient::term_logRaw(FILE* file, unsigned int nchars)
 {
-    this->term_setOperation(OP_READ);
-    memset(this->clientReadBuffer, 0, 1024);
-    DWORD nbr = 0;
-    CONTERM_CLIENT_CONTEXT* lpContext = (CONTERM_CLIENT_CONTEXT*)this->lpContermClientContext;
-    ReadFile(this->hClient, this->clientReadBuffer, 1024,
-        &nbr, &lpContext->overlapped);
+
+}
+
+unsigned int ContermPipeClient::term_readChars()
+{
+    //this->term_setOperation(OP_READ);
+    //memset(this->clientReadBuffer, 0, 1024);
+    //DWORD nbr = 0;
+    //CONTERM_CLIENT_CONTEXT* lpContext = (CONTERM_CLIENT_CONTEXT*)this->lpContermClientContext;
+    //ReadFile(this->hClient, this->clientReadBuffer, 1024,
+    //    &nbr, &lpContext->overlapped);
+    return 0;
 }
 
 void ContermPipeClient::term_writeChars(const char* data, unsigned int nchars)
 {
-    this->term_setOperation(OP_WRITE);
+    //this->term_setOperation(OP_WRITE);
 }
 
 void ContermPipeClient::term_printBuffer(unsigned int nchars)
