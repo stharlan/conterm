@@ -268,6 +268,10 @@ DWORD WINAPI WriteThread(void* pVoid)
 							// check if io is pending
 							// if io is pending, save this to a buffer
 							// if no io pending, write chars
+							// Arrow Down \u001b[B
+							// Arrow Left \u001b[D
+							// Arrow Right \u001b[C
+							// Arrow Up \u001b[A
 							lpClient->term_writeChars(&inrec.Event.KeyEvent.uChar.AsciiChar, 1);
 						}
 					}
@@ -312,9 +316,9 @@ DWORD WINAPI ReadThread(void* pVoid)
 
 	do {
 		// this will block
-		fprintf(log, "Waiting for data...\n");
+		//fprintf(log, "Waiting for data...\n");
 		unsigned int nbr = lpClient->term_readChars();
-		fprintf(log, "Got %i chars.\n", nbr);
+		//fprintf(log, "Got %i chars.\n", nbr);
 		if (nbr > 0) {
 			lpClient->term_logRaw(log, nbr);
 			lpClient->term_printBuffer(nbr);

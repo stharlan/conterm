@@ -376,18 +376,21 @@ void TelnetClient::term_printBuffer(unsigned int nchars)
             // telnet command (do it!)
             i = this->parseTelnetCommand(i, nchars);
         }
-        else if (c == 27) {
-            // escape!
-            i = this->parseAnsiEscape(i, nchars);
-        }
-        else if (c == 8 || c == 10 || c == 13 || (c > 31 && c < 127)) {
-            // printable! ooh!
+        else {
             printf("%c", c);
         }
-        else {
+        //else if (c == 27) {
+            // escape!
+            //i = this->parseAnsiEscape(i, nchars);
+        //}
+        //else if (c == 8 || c == 10 || c == 13 || (c > 31 && c < 127)) {
+            // printable! ooh!
+            //printf("%c", c);
+        //}
+        //else {
             // other, hmmm...
             //printf("\nVAL: %i\n", c);
-        }
+        //}
     }
 }
 
