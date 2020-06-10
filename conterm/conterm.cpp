@@ -12,6 +12,9 @@
 
 IContermClient* g_client = NULL;
 
+void SignalReadThreadToQuit();
+void StopWriteThread();
+
 // thread
 // check for data to send
 //   send data
@@ -272,31 +275,43 @@ DWORD WINAPI WriteThread(void* pVoid)
 					DWORD ner = 0;
 					ReadConsoleInput(GetStdHandle(STD_INPUT_HANDLE), &inrec, 1, &ner);
 					if (inrec.EventType == KEY_EVENT) {
+
 						if (TRUE == inrec.Event.KeyEvent.bKeyDown)
 						{
-							// check if io is pending
-							// if io is pending, save this to a buffer
-							// if no io pending, write chars
-							// Arrow Down \u001b[B
-							// Arrow Left \u001b[D
-							// Arrow Right \u001b[C
-							// Arrow Up \u001b[A
-							switch (inrec.Event.KeyEvent.wVirtualKeyCode) {
-							case VK_LEFT:
-								lpClient->term_writeChars(ARROW_LEFT, strlen(ARROW_LEFT));
-								break;
-							case VK_RIGHT:
-								lpClient->term_writeChars(ARROW_RIGHT, strlen(ARROW_RIGHT));
-								break;
-							case VK_UP:
-								lpClient->term_writeChars(ARROW_UP, strlen(ARROW_UP));
-								break;
-							case VK_DOWN:
-								lpClient->term_writeChars(ARROW_DOWN, strlen(ARROW_DOWN));
-								break;
-							default:
-								lpClient->term_writeChars(&inrec.Event.KeyEvent.uChar.AsciiChar, 1);
-								break;
+							//printf("'%i'\n", inrec.Event.KeyEvent.uChar.AsciiChar);
+							if (inrec.Event.KeyEvent.wVirtualKeyCode == VK_F4)
+								//((inrec.Event.KeyEvent.dwControlKeyState & (LEFT_CTRL_PRESSED | RIGHT_CTRL_PRESSED))))
+							{
+								SetEvent(hWriteThreadQuitEvent);
+								e = nev;
+								SignalReadThreadToQuit();
+								g_client->term_disconnect();
+							}
+							else {
+								// check if io is pending
+								// if io is pending, save this to a buffer
+								// if no io pending, write chars
+								// Arrow Down \u001b[B
+								// Arrow Left \u001b[D
+								// Arrow Right \u001b[C
+								// Arrow Up \u001b[A
+								switch (inrec.Event.KeyEvent.wVirtualKeyCode) {
+								case VK_LEFT:
+									lpClient->term_writeChars(ARROW_LEFT, (unsigned int)strlen(ARROW_LEFT));
+									break;
+								case VK_RIGHT:
+									lpClient->term_writeChars(ARROW_RIGHT, (unsigned int)strlen(ARROW_RIGHT));
+									break;
+								case VK_UP:
+									lpClient->term_writeChars(ARROW_UP, (unsigned int)strlen(ARROW_UP));
+									break;
+								case VK_DOWN:
+									lpClient->term_writeChars(ARROW_DOWN, (unsigned int)strlen(ARROW_DOWN));
+									break;
+								default:
+									lpClient->term_writeChars(&inrec.Event.KeyEvent.uChar.AsciiChar, 1);
+									break;
+								}
 							}
 						}
 					}
@@ -455,6 +470,7 @@ int main()
 	// client connection and signal
 	// the read thread that it can exit
 	printf("MAIN: Wating for read thread to quit...\n");
+	printf("MAIN: F4 to quit.\n");
 	WaitForReadThreadToQuit();
 
 	// disconnect client();
