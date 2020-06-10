@@ -38,7 +38,9 @@ TelnetClient::~TelnetClient()
     //this->lpContermClientContext = NULL;
 }
 
-int TelnetClient::term_connect()
+// parm1 is host
+// parm2 is port
+int TelnetClient::term_connect(const char* parm1, const char* parm2)
 {
     struct addrinfo* result = NULL;
     struct addrinfo* ptr = NULL;
@@ -50,7 +52,7 @@ int TelnetClient::term_connect()
     hints.ai_protocol = IPPROTO_TCP;
     
     // Resolve the server address and port
-    int iResult = getaddrinfo("localhost", "23", &hints, &result);
+    int iResult = getaddrinfo(parm1, parm2, &hints, &result);
     if (iResult != 0) {
         printf("getaddrinfo failed: %d\n", iResult);
         return 1;
@@ -71,12 +73,19 @@ int TelnetClient::term_connect()
     }
 
     // Connect to server.
-    printf("TELNET: Connecting to socket\n");
+    //printf("TELNET: Connecting to socket\n");
     iResult = connect(this->ConnectSocket, ptr->ai_addr, (int)ptr->ai_addrlen);
     if (iResult == SOCKET_ERROR) {
-        printf("TELNET: Failed to connect to socket\n");
+        //printf("TELNET: Failed to connect to socket\n");
+        if (WSAGetLastError() == WSAECONNREFUSED) {
+            printf("ERROR: No connection could be made because the target machine actively refused it.\n");
+        }
+        else {
+            printf("CONNECT ERROR: %i\n", WSAGetLastError());
+        }
         closesocket(this->ConnectSocket);
         this->ConnectSocket = INVALID_SOCKET;
+        return 1;
     }
 
     // Should really try the next address returned by getaddrinfo
@@ -87,7 +96,7 @@ int TelnetClient::term_connect()
     freeaddrinfo(result);
 
     if (this->ConnectSocket == INVALID_SOCKET) {
-        printf("Unable to connect to server!\n");
+        //printf("Unable to connect to server!\n");
         WSACleanup();
         return 1;
     }

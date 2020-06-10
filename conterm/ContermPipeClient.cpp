@@ -68,7 +68,7 @@ DWORD WINAPI ContermPipeClient::ServerProc(void* pVoid)
     DWORD nbw = 0;
     DWORD nbr = 0;
     printf("CONTERM: Sending hello message on pipe\n");
-    WriteFile(lpClient->hPipeServer, WelcomeMessage, strlen(WelcomeMessage), &nbw, NULL);
+    WriteFile(lpClient->hPipeServer, WelcomeMessage, (DWORD)strlen(WelcomeMessage), &nbw, NULL);
 
     BOOL status = FALSE;
 
@@ -91,7 +91,7 @@ DWORD WINAPI ContermPipeClient::ServerProc(void* pVoid)
 }
 
 
-int ContermPipeClient::term_connect()
+int ContermPipeClient::term_connect(const char* parm1, const char* parm2)
 {
     //this->hClient = CreateFileA(THIS_PIPE_NAME,
     //    GENERIC_READ | GENERIC_WRITE,

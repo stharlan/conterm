@@ -141,11 +141,13 @@
   <ItemGroup>
     <ClCompile Include="conterm.cpp" />
     <ClCompile Include="ContermPipeClient.cpp" />
+    <ClCompile Include="SerialModemClient.cpp" />
     <ClCompile Include="TelnetClient.cpp" />
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="ContermPipeClient.h" />
     <ClInclude Include="IPipeClient.h" />
+    <ClInclude Include="SerialModemClient.h" />
     <ClInclude Include="TelnetClient.h" />
   </ItemGroup>
   <ItemGroup>

@@ -7,6 +7,7 @@
 #include "IPipeClient.h"
 #include "ContermPipeClient.h"
 #include "TelnetClient.h"
+#include "SerialModemClient.h"
 
 #pragma comment(lib, "winmm.lib")
 
@@ -238,14 +239,12 @@ void enableANSIEscapeSequences()
 	// enable the console to handle ansi escape sequences
 	HANDLE stdOut = GetStdHandle(STD_OUTPUT_HANDLE);
 	GetConsoleMode(stdOut, &origMode);
-	printf("Console needs virtual terminal processing. Setting...\n");
-	bRes = SetConsoleMode(stdOut, origMode | ENABLE_VIRTUAL_TERMINAL_PROCESSING);
-	if (bRes == 0) {
-		printf("ERROR: SetConsoleMode failed %i\n", GetLastError());
-	}
-	else {
-		printf("Virtual processing is set.\n");
-		resetConsole();
+	if ((origMode & ENABLE_VIRTUAL_TERMINAL_PROCESSING) == 0) {
+		printf("Console needs virtual terminal processing. Setting...\n");
+		bRes = SetConsoleMode(stdOut, origMode | ENABLE_VIRTUAL_TERMINAL_PROCESSING);
+		if (bRes == 0) {
+			printf("\nERROR: Failed to set virtual terminal processing. ERROR NUMBER %i\n", GetLastError());
+		}
 	}
 }
 
@@ -282,6 +281,7 @@ DWORD WINAPI WriteThread(void* pVoid)
 							if (inrec.Event.KeyEvent.wVirtualKeyCode == VK_F4)
 								//((inrec.Event.KeyEvent.dwControlKeyState & (LEFT_CTRL_PRESSED | RIGHT_CTRL_PRESSED))))
 							{
+								printf("BREAK: F4 pressed. Shutting down...\n");
 								SetEvent(hWriteThreadQuitEvent);
 								e = nev;
 								SignalReadThreadToQuit();
@@ -405,8 +405,37 @@ BOOL WINAPI HandlerRoutine(
 	return FALSE;
 }
 
-int main()
+void usage()
 {
+	printf("\nUsage: conterm.exe <type> <parm1> <parm2>\n\n");
+	printf("Types:\n");
+	printf("\ttelnet <host> <port>\n");
+	printf("\tmodem <phone number> <com port>\n");
+	printf("\nF4 to quit.\n");
+	printf("\n");
+}
+
+int main(int argc, char* argv[])
+{
+	printf("\nconterm by Stuart Harlan, Copyright 2020\n");
+	printf("https://github.com/stharlan/conterm\n");
+
+	if (argc != 4) {
+		usage();
+		return 0;
+	}
+
+	if (strcmp(argv[1], "modem") == 0) {
+		printf("\nUsing modem...\n");
+	}
+	else if (strcmp(argv[1], "telnet") == 0) {
+		printf("\nUsing telnet...\n");
+	}
+	else {
+		usage();
+		return 0;
+	}
+
 
 	WSADATA wsadata = { 0 };
 	WSAStartup(MAKEWORD(2, 2), &wsadata);
@@ -434,20 +463,6 @@ int main()
 	//WaitForSingleObject(hWorkerThreadReady, INFINITE);
 
 	//printf("MAIN: Opening COM port 5...\n");
-	//HANDLE hCom = CreateFile(L"COM5", 
-	//	GENERIC_READ | GENERIC_WRITE, 
-	//	0, 
-	//	NULL, 
-	//	OPEN_EXISTING,
-	//	FILE_FLAG_OVERLAPPED, 
-	//	NULL);
-	//if (hCom == INVALID_HANDLE_VALUE)
-	//{
-	//	printf("MAIN: failed to open com port\n");
-	//	WaitForSingleObject(hThread, INFINITE);
-	//	CloseHandle(hThread);
-	//	CloseHandle(hIocp);
-	//	return 0;
 	//}
 	//else {
 	//	printf("MAIN: com port is open\n");
@@ -455,16 +470,28 @@ int main()
 
 	//ContermPipeClient* lpClient = new ContermPipeClient();
 
-	TelnetClient* lpClient = new TelnetClient();
-	g_client = (IContermClient*)lpClient;
+	if (strcmp(argv[1], "telnet") == 0) {
+		TelnetClient* lpClient = new TelnetClient();
+		g_client = (IContermClient*)lpClient;
+	}
+	else if (strcmp(argv[1], "modem") == 0) {
+		SerialModemClient* lpClient = new SerialModemClient();
+		g_client = (IContermClient*)lpClient;
+	}
 
-	printf("MAIN: Connecting to server\n");
-	lpClient->term_connect();
+	printf("Connecting to server...\n");
+	if (1 == g_client->term_connect(argv[2], argv[3]))
+	{
+		printf("ERROR: Failed to connect to server. Quitting.\n\n");
+		delete g_client;
+		return 0;
+	}
 
 	// start read thread
 	printf("MAIN: Starting read thread...\n");
-	StartReadThread(lpClient);
-	StartWriteThread(lpClient);
+	resetConsole();
+	StartReadThread(g_client);
+	StartWriteThread(g_client);
 
 	// pressing ctrl-c will close the 
 	// client connection and signal
@@ -474,8 +501,8 @@ int main()
 	WaitForReadThreadToQuit();
 
 	// disconnect client();
-	delete lpClient;
-	lpClient = NULL;
+	delete g_client;
+	g_client = NULL;
 
 	//printf("MAIN: Specifying terminal\n");
 	//lpClient->term_writeChars("TERM_TYPE=ANSI-BBS\r");
@@ -484,43 +511,8 @@ int main()
 
 	//StartInputHandler(lpClient);
 
-	//DCB dcbSerialParams = { 0 };
-	//dcbSerialParams.DCBlength = sizeof(dcbSerialParams);
-	//printf("MAIN: Getting COM state...\n");
-	//BOOL success = GetCommState(hCom, &dcbSerialParams);
-	//if (success) {
-	//	printf("MAIN: Got comm state ok\n");
-	//	dcbSerialParams.BaudRate = CBR_56000;
-	//	dcbSerialParams.ByteSize = 8;
-	//	dcbSerialParams.Parity = NOPARITY;
-	//	dcbSerialParams.StopBits = ONESTOPBIT;
-	//	success = SetCommState(hCom, &dcbSerialParams);
-	//	if (success) {
-	//		printf("MAIN: Set comm state ok\n");
-	//	}
-	//	else {
-	//		printf("MAIN: ERROR: Failed to set comm state\n");
-	//	}
-	//}
-	//else {
-	//	printf("MAIN: ERROR: Failed to get comm state\n");
-	//}
 
-	//COMMTIMEOUTS timeouts = { 0 };
-	//timeouts.ReadIntervalTimeout = 50; // in milliseconds
-	//timeouts.ReadTotalTimeoutConstant = 50; // in milliseconds
-	//timeouts.ReadTotalTimeoutMultiplier = 10; // in milliseconds
-	//timeouts.WriteTotalTimeoutConstant = 50; // in milliseconds
-	//timeouts.WriteTotalTimeoutMultiplier = 10; // in milliseconds
 
-	//printf("MAIN: Setting COM timeouts...\n");
-	//success = SetCommTimeouts(hCom, &timeouts);
-	//if (success) {
-	//	printf("MAIN: set comm timeouts ok\n");
-	//}
-	//else {
-	//	printf("MAIN: ERROR: Failed to set comm timeouts\n");
-	//}
 
 	// LOOP HERE
 
@@ -582,7 +574,7 @@ int main()
 
 	resetConsole();
 
-	printf("MAIN: Done.\n");
+	printf("\nDone. Thanks for using conterm!\n\n");
 	return 0;
 }
 

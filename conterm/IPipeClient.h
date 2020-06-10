@@ -4,7 +4,7 @@
 class IContermClient
 {
 public:
-	virtual int term_connect() = 0;
+	virtual int term_connect(const char* parm1, const char* parm2) = 0;
 	virtual int term_disconnect() = 0;
 	virtual void term_requestCharsToRead() = 0;
 	virtual unsigned int term_readChars() = 0;

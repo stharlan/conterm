@@ -7,7 +7,7 @@ public:
 	TelnetClient();
 	~TelnetClient();
 
-	int term_connect();
+	int term_connect(const char* parm1, const char* parm2);
 	int term_disconnect();
 	void term_requestCharsToRead();
 	unsigned int term_readChars();
