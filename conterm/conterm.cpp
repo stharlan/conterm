@@ -246,6 +246,15 @@ void enableANSIEscapeSequences()
 	}
 }
 
+// Arrow Down \u001b[B
+const char* ARROW_DOWN = "\u001b[B";
+// Arrow Left \u001b[D
+const char* ARROW_LEFT = "\u001b[D";
+// Arrow Right \u001b[C
+const char* ARROW_RIGHT = "\u001b[C";
+// Arrow Up \u001b[A
+const char* ARROW_UP = "\u001b[A";
+
 // thread to write to server
 DWORD WINAPI WriteThread(void* pVoid)
 {
@@ -272,7 +281,23 @@ DWORD WINAPI WriteThread(void* pVoid)
 							// Arrow Left \u001b[D
 							// Arrow Right \u001b[C
 							// Arrow Up \u001b[A
-							lpClient->term_writeChars(&inrec.Event.KeyEvent.uChar.AsciiChar, 1);
+							switch (inrec.Event.KeyEvent.wVirtualKeyCode) {
+							case VK_LEFT:
+								lpClient->term_writeChars(ARROW_LEFT, strlen(ARROW_LEFT));
+								break;
+							case VK_RIGHT:
+								lpClient->term_writeChars(ARROW_RIGHT, strlen(ARROW_RIGHT));
+								break;
+							case VK_UP:
+								lpClient->term_writeChars(ARROW_UP, strlen(ARROW_UP));
+								break;
+							case VK_DOWN:
+								lpClient->term_writeChars(ARROW_DOWN, strlen(ARROW_DOWN));
+								break;
+							default:
+								lpClient->term_writeChars(&inrec.Event.KeyEvent.uChar.AsciiChar, 1);
+								break;
+							}
 						}
 					}
 				}
